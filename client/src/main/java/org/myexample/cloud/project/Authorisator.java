@@ -7,7 +7,6 @@ public class Authorisator {
     public static boolean isAuthorised() {
         return authorised;
     }
-
     public static void setAuthorised(boolean authorised) {
         Authorisator.authorised = authorised;
     }

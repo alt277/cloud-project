@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import org.myexample.cloud.project.common.Sender;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -57,7 +58,8 @@ public class InHandler extends ChannelInboundHandlerAdapter {
                     byte[] fileName = new byte[nextLength];
                     buf.readBytes(fileName);
                     System.out.println("STATE: Filename received: " + new String(fileName, "UTF-8"));
-                    out = new BufferedOutputStream(new FileOutputStream("server_storage/" + new String(fileName)));
+                    out = new BufferedOutputStream(new FileOutputStream(Clients.list.get(ctx.channel())+"_server_storage/" + new String(fileName)));
+//                    out = new BufferedOutputStream(new FileOutputStream("server_storage/" + new String(fileName)));
                     currentState = State.FILE_LENGTH;
                 }
             }
@@ -106,13 +108,14 @@ public class InHandler extends ChannelInboundHandlerAdapter {
         if (buf.readableBytes() == 0) {
             buf.release();
         }
+        Sender.sendRefresh(ctx.channel());
     }
 
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        cause.printStackTrace(); // обязательно делать токое переопределение чтобы знать
-        ctx.close();             // что произошло
+        cause.printStackTrace();
+        ctx.close();
         System.out.println(" ошибки при передаче во входяшем хендлере");
     }
 }

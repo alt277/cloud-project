@@ -18,6 +18,7 @@ public class MainClient extends Application {
         primaryStage.show();
 
         MainController c = fxmlLoader.getController();
+
         primaryStage.setOnCloseRequest(event->{
             ByteNetwork.getInstance().getCurrentChannel().close();
             Platform.exit();

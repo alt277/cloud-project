@@ -4,15 +4,14 @@ import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.control.ListView;
-import javafx.scene.control.PasswordField;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import org.myexample.cloud.project.common.Sender;
 
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,9 +19,12 @@ import java.util.ResourceBundle;
 import java.util.concurrent.CountDownLatch;
 
 public class MainController implements Initializable {
-
+    public Button ButtonSYNC;
+    @FXML
+    Label client_title;
     public  boolean isAuthorized;
     @FXML TextField     loginField;
+
     @FXML PasswordField passwordField;
 
     @FXML
@@ -54,6 +56,8 @@ public class MainController implements Initializable {
             buttonPanel2.setManaged(false);
             infoPanel.setVisible(false);
             infoPanel.setManaged(false);
+            ButtonSYNC.setVisible(false);
+            ButtonSYNC.setManaged(false);
         }
         else {
             authorisePanel.setVisible(false);
@@ -64,6 +68,9 @@ public class MainController implements Initializable {
             buttonPanel2.setManaged(true);
             infoPanel.setVisible(true);
             infoPanel.setManaged(true);
+            ButtonSYNC.setVisible(true);
+            ButtonSYNC.setManaged(true);
+
         }
     }
 
@@ -72,9 +79,17 @@ public class MainController implements Initializable {
 
 
         CountDownLatch networkStarter = new CountDownLatch(1);
-        new Thread(() -> ByteNetwork.getInstance().start(networkStarter)).start();
+        new Thread(() -> ByteNetwork.getInstance().start(networkStarter,()->{
+                    setAuthorized(true);
+                    refreshAll();
+
+            },
+                ()->{
+                   refreshAll();
+                    setAuthorized(true);
+                    } )).start();
         try {
-            networkStarter.await();   // чтобы подождать открытия соединения
+            networkStarter.await();                   //   подождать открытия соединения
 
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -85,32 +100,25 @@ public class MainController implements Initializable {
 
     public void pressOnDownloadBtnSend(ActionEvent actionEvent) throws IOException {
         if (tfFileName.getLength() > 0) {
+            Path pathToFile=(Paths.get(ClientHandler1.storage_way +tfFileName.getText()));
+            System.out.println(pathToFile);
 
-            if (Files.exists(Paths.get("client_storage/" +tfFileName.getText()) )) {
-                Sender.sendFile(Paths.get("client_storage/"+tfFileName.getText()),
+            if (Files.exists(pathToFile)) {
+               Sender.sendFile(pathToFile,
+//            if (Files.exists(Paths.get("client_storage/" +tfFileName.getText() ))) {
+//                Sender.sendFile(Paths.get("client_storage/" + tfFileName.getText()),
                         ByteNetwork.getInstance().getCurrentChannel(), future -> {
-                    if (!future.isSuccess()) {
-                        future.cause().printStackTrace();
-
-                    }
-                    if (future.isSuccess()) {
-                        System.out.println(" Файл передан с клиента"+tfFileName.getText());
-                     new Thread(()->{
-                         try {
-                             Thread.sleep(1000);
-                         } catch (InterruptedException e) {
-                             e.printStackTrace();
-                         }
-                         refreshAll();
-                     }).start();
-
-                    }
-                });
-
+                            if (!future.isSuccess()) {
+                                future.cause().printStackTrace();
+                            }
+                            if (future.isSuccess()) {
+                                System.out.println("Btn send: Файл передан с клиента" + tfFileName.getText());
+                            }
+                        });
+            }
                 tfFileName.clear();
                 System.out.println("Button Send works");
 
-            }
         }
     }
     public void pressOnDownloadBtnGet(ActionEvent actionEvent) throws IOException {
@@ -123,14 +131,7 @@ public class MainController implements Initializable {
                             }
                             if (future.isSuccess()) {
                                 System.out.println("Запрос файла передан с клиента" + tfFileName.getText());
-                                new Thread(()->{
-                                    try {
-                                        Thread.sleep(1000);
-                                    } catch (InterruptedException e) {
-                                        e.printStackTrace();
-                                    }
-                                    refreshAll();
-                                }).start();
+
                             }
                         });
                 tfFileName.clear();
@@ -146,14 +147,7 @@ public class MainController implements Initializable {
                         }
                         if (future.isSuccess()) {
                             System.out.println("Запрос файла передан с клиента" + tfFileName.getText());
-                            new Thread(()->{
-                                try {
-                                    Thread.sleep(700);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                refreshAll();
-                            }).start();
+
                         }
                     });
             tfFileName.clear();
@@ -169,14 +163,7 @@ public class MainController implements Initializable {
                         }
                         if (future.isSuccess()) {
                             System.out.println("Запрос  передан с клиента" + tfFileName.getText());
-                            new Thread(()->{
-                                try {
-                                    Thread.sleep(1000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                refreshAll();
-                            }).start();
+
                         }
                     });
             tfFileName.clear();
@@ -192,14 +179,6 @@ public class MainController implements Initializable {
                         }
                         if (future.isSuccess()) {
                             System.out.println("Запрос файла передан с клиента" + tfFileName.getText());
-                            new Thread(()->{
-                                try {
-                                    Thread.sleep(1000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                refreshAll();
-                            }).start();
                         }
                     });
             tfFileName.clear();
@@ -210,7 +189,7 @@ public class MainController implements Initializable {
         Platform.runLater(() -> {
             try {
                 filesList.getItems().clear();
-                Files.list(Paths.get("client_storage"))
+                Files.list(Paths.get(ClientHandler1.storage_way))
                         .filter(p -> !Files.isDirectory(p))
                         .map(p -> p.getFileName().toString())
                         .forEach(o -> filesList.getItems().add(o));
@@ -219,33 +198,23 @@ public class MainController implements Initializable {
             }
         });
     }
-    public void refreshLocalFilesList1() {
-        Platform.runLater(() -> {
-            try {
-                filesList1.getItems().clear();
-                Files.list(Paths.get("server_storage"))
-                        .filter(p -> !Files.isDirectory(p))
-                        .map(p -> p.getFileName().toString())
-                        .forEach(o -> filesList1.getItems().add(o));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
-    }
+
     public  void refreshAll() {
         Platform.runLater(() -> {
             try {
+                System.out.println("путь для обновления: "+ClientHandler1.storage_way);
                 filesList.getItems().clear();
-                Files.list(Paths.get("client_storage"))
-                        .filter(p -> !Files.isDirectory(p))
-                        .map(p -> p.getFileName().toString())
-                        .forEach(o -> filesList.getItems().add(o));
+                if (Files.exists(Paths.get(ClientHandler1.storage_way))) {
+                    Files.list(Paths.get(ClientHandler1.storage_way))
+                            .filter(p -> !Files.isDirectory(p))
+                            .map(p -> p.getFileName().toString())
+                            .forEach(o -> filesList.getItems().add(o));
+                }
 
                 filesList1.getItems().clear();
-                Files.list(Paths.get("server_storage"))
-                        .filter(p -> !Files.isDirectory(p))
-                        .map(p -> p.getFileName().toString())
+                 ClientHandler2.refreshingFiles.stream()
                         .forEach(o -> filesList1.getItems().add(o));
+   //        ClientHandler2.refreshingFiles.clear();
 
                 filesList2.getItems().clear();
                 Files.list(Paths.get("Access_storage"))
@@ -261,7 +230,7 @@ public class MainController implements Initializable {
 
     public void pressOnDownloadBtnSync(ActionEvent actionEvent) throws IOException {
         List<String> clientFiles =new ArrayList<>();
-        Files.list(Paths.get("client_storage"))
+        Files.list(Paths.get(ClientHandler1.storage_way))
                 .filter(p -> !Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())
                 .forEach(o -> clientFiles.add(o));     // получаем список файлов клиента
@@ -275,14 +244,7 @@ public class MainController implements Initializable {
                         }
                         if (future.isSuccess()) {
                             System.out.println("Controller: Список файлов передан с клиента" );
-                            new Thread(()->{
-                                try {
-                                    Thread.sleep(3000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                refreshAll();
-                            }).start();
+                          refreshAll();
                         }
                     });
             //clientFiles.clear();
@@ -305,22 +267,9 @@ public class MainController implements Initializable {
             loginField.clear();
             passwordField.clear();
             System.out.println("Button Enter works");
-            waitForAnswer();
+
         }
     }
 
-    public void waitForAnswer() {
-        try {
-            for (int i = 0; i < 20; i++) {
-                Thread.sleep(100);
-                System.out.printf("Checking at %d times%n", i);
-                if (Authorisator.isAuthorised()) {
-                    setAuthorized(true);
-                    break;
-                }
-            }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
+
 }

@@ -28,7 +28,7 @@ public class ByteNetwork {
         return currentChannel;
     }
 
-    public void start(CountDownLatch countDownLatch) {
+    public void start(CountDownLatch countDownLatch, MyCallback callbackAuthOK,RefreshCallback refreshCallback) {
         EventLoopGroup group = new NioEventLoopGroup();
         try {
             Bootstrap clientBootstrap = new Bootstrap();
@@ -37,7 +37,7 @@ public class ByteNetwork {
                     .remoteAddress(new InetSocketAddress("localhost", 8182))
                     .handler(new ChannelInitializer<SocketChannel>() {
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            socketChannel.pipeline().addLast(new ClientHandler1(),new ClientHandler2());
+                            socketChannel.pipeline().addLast(new ClientHandler1(callbackAuthOK,refreshCallback),new ClientHandler2(refreshCallback));
                             currentChannel = socketChannel;
                         }
                     });

@@ -7,16 +7,19 @@ import org.myexample.cloud.project.common.Sender;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-
+import java.util.Map;
 
 public class Handler2 extends ChannelInboundHandlerAdapter {
+
+    protected  List<String> clientFiles = new ArrayList<>();
+    protected  List<String> serverFiles = new ArrayList<>();
+    protected  List<String> missingFiles = new ArrayList<>();
+
     private BufferedInputStream in;
     private BufferedOutputStream out;
     private static final String GET_FILE = "GET";
@@ -25,7 +28,7 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
     private static final String CLOSE_ASSESS = "CLO";
     private static final String SYNCHRONIZE = "SYN";
     private static String AUTHORISE = "AUT?";
-    private HashMap<Channel,String> clientsList= new HashMap<>();
+ //   private HashMap<Channel,String> clientsList= new HashMap<>();
 
     private static final byte SYGNAL_AUTH_OK = 15;
 
@@ -47,12 +50,16 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
         }
         System.out.println("message полученный = " +message);
 
-        System.out.println("Имя файла после удал. комманды:" + fileName);
+        System.out.println("Имя файла после удал. комманды:"
+                + fileName);
         if (message.startsWith(GET_FILE)) {
-            if (Files.exists(Paths.get("server_storage/" + fileName))) {
-                Sender.sendFile(Paths.get("server_storage/" + fileName),
-                        ctx.channel(), future -> {
 
+            String storageName=Clients.list.get(ctx.channel())+"_server_storage/";
+            System.out.println("storageName="+storageName);
+            if (Files.exists(Paths.get(storageName+fileName))) {
+
+                Sender.sendFile(Paths.get(storageName + fileName),
+                        ctx.channel(), future -> {
                             if (!future.isSuccess()) {
                                 future.cause().printStackTrace();
                             }
@@ -62,29 +69,26 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
                         });
                 System.out.println(" Handler2 : file:" + fileName + " отослан ");
             }
+            if(!(Clients.list.get(ctx.channel())==null));
+            {
+                Clients.sendListOfFilesToRefresh( Clients.list.get(ctx.channel()) + "_server_storage/", ctx.channel());
+            }
         }
         if (message.startsWith(DELETE_FILE)) {
-            Files.deleteIfExists(Paths.get("server_storage/" + fileName));
+            String storageName=Clients.list.get(ctx.channel())+"_server_storage/";
+            Files.deleteIfExists(Paths.get(storageName + fileName));
             Files.deleteIfExists(Paths.get("Access_storage/" + fileName));
             System.out.println("Блок delete!");
         }
         if (message.startsWith(OPEN_ACCESS)) {
             System.out.println(" блок откр доступ ");
-            if (Files.exists(Paths.get("server_storage/" + fileName))) {
+            String storageName=Clients.list.get(ctx.channel())+"_server_storage/";
+            System.out.println("storageName="+storageName);
+            if (Files.exists(Paths.get(storageName+fileName))) {
 
-                int size = (int) Files.size(Paths.get("server_storage/" + fileName));
-                byte[] arr1 = new byte[size];
-                in = new BufferedInputStream(new FileInputStream("server_storage/" + fileName));
-                in.read(arr1);
                 out = new BufferedOutputStream(new FileOutputStream("Access_storage/" + fileName));
-                out.write(arr1);
-                in.close();
+                Files.copy(Paths.get("Access_storage/" + fileName),out);
                 out.close();
-
-                //     Files.write(Paths.get("server_storage/" + fileName)), ;
-                //    FileRegion region = new DefaultFileRegion(Paths.get("server_storage/" + fileName), 0, Files.size(path));
-                //   out.write(region);
-                System.out.println(" блок откр доступ ");
             }
         }
 
@@ -104,32 +108,55 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
 
             String nick =
                     authService.getNickByLoginPass(mass[1], mass[2]);
-            if (nick != null) {
-                Sender.sendOK(ctx.channel());
+            if ( (nick != null)  && (!Clients.isNickBusy(nick)) ) {
+ //               Sender.sendOK(ctx.channel());
                 System.out.println("Успешная авторизация клиента " + nick);
-                String storageName=nick+"_storage/";
-                clientsList.put(ctx.channel(),nick);
-                Files.createDirectory(Paths.get(storageName));
-          //      out = new BufferedOutputStream(new FileOutputStream(storageName));
+                String storageName=nick+"_server_storage/";
+                String clientStorageName="client_"+nick+"_storage/";
+                Clients.list.put(ctx.channel(),nick);
+                Sender.authorizationOK(clientStorageName,ctx.channel(), future -> {
+                    if (!future.isSuccess()) {
+                        future.cause().printStackTrace();
+                    }
+                    if (future.isSuccess()) {
+                        System.out.println("Успешная авторизация клиента " + nick+
+                                " хранилище клиента : "+clientStorageName);
+                    }
+                });;
+                if (Files.notExists(Paths.get(storageName))) {
+                    System.out.println("Новая директория!");
+                    Files.createDirectory(Paths.get(storageName));
 
-            }
-        } else {
-            System.out.println("Неверные логин/пароль");
+                }
+                if(!(Clients.list.get(ctx.channel())==null));
+                {
+                    Clients.sendListOfFilesToRefresh( Clients.list.get(ctx.channel()) + "_server_storage/", ctx.channel());
+                }
+                for (Map.Entry<Channel,String> e : Clients.list.entrySet()) {      // это -   Set <Map.Entry<K,V>>entrySet()
+                    Channel key = e.getKey();
+                    String value = e.getValue();
+                    System.out.println("Channel="+key);
+                    System.out.println("Nick ="+value);
+                    }
+                Sender.sendOK(ctx.channel());
+
+            } else if(Clients.isNickBusy(nick)){
+                      System.out.println("Учетная запись уже использется");
+            }else{
+                      System.out.println(" Неверный логин или пароль ");
+                 }
+  //          Clients.sendListOfFilesToRefresh(serverFiles, Clients.list.get(ctx.channel())+"_server_storage/" , ctx.channel() );
         }
 
         if (message.startsWith(SYNCHRONIZE)) {
             System.out.println("Полученный список файлов:  " + message);
 
-            List<String> clientFiles = new ArrayList<>();
-            List<String> serverFiles = new ArrayList<>();
-            List<String> missingFiles = new ArrayList<>();
-
             for (int i = 1; i < parts.length; i++) {
                 clientFiles.add(parts[i]);                // получаем список файлов клиента
             }
             clientFiles.stream().forEach(o -> System.out.println(o));
-
-            Files.list(Paths.get("server_storage"))
+            String way = Clients.list.get(ctx.channel())+"_server_storage/";
+            Files.list(Paths.get(way))
                     .filter(p -> !Files.isDirectory(p))
                     .map(p -> p.getFileName().toString())
                     .forEach(o -> serverFiles.add(o));     // получаем список файлов сервера
@@ -140,13 +167,12 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
             for (String o : serverFiles) {
                 if (!(clientFiles.contains(o))) {
                     System.out.println("Блок отсылки");
-                    Sender.sendFile(Paths.get("server_storage/" + o),
+                    Sender.sendFile(Paths.get(way + o),
                             ctx.channel(), future -> {
-
-                                if (!future.isSuccess()) {
+                        if (!future.isSuccess()) {
                                     future.cause().printStackTrace();
                                 }
-                                if (future.isSuccess()) {
+                        if (future.isSuccess()) {
                                     System.out.println(" Отсутствующий файл пошел с сервера "+o);
                                 }
                             });
@@ -159,7 +185,6 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
             }
             Sender.sendSYNC(missingFiles,
                     ctx.channel(), future -> {
-
                         if (!future.isSuccess()) {
                             future.cause().printStackTrace();
                         }
@@ -169,19 +194,17 @@ public class Handler2 extends ChannelInboundHandlerAdapter {
                     });
             System.out.println("Список осутствуюших на сервере файлов: ");
             missingFiles.stream().forEach(o -> System.out.print(o+" "));
-//                clientFiles.clear();
-//                serverFiles.clear();
-//                missingFiles.clear();
-//                message="";
-//            System.out.println("message после очистки = " +message);
+ //           Sender.sendRefresh(ctx.channel());
 
-//            System.out.println("Списки после очистки: ");
-//                clientFiles.stream().forEach(o -> System.out.print(o+" "));
-//                serverFiles.stream().forEach(o -> System.out.print(o+" "));
-//                missingFiles.stream().forEach(o -> System.out.print(o+" "));
-//            System.out.println("Конец списков после очистки: ");
         }
-
+      //  Sender.sendRefresh(ctx.channel());
+        if(!(Clients.list.get(ctx.channel())==null));{
+            Clients.sendListOfFilesToRefresh(Clients.list.get(ctx.channel()) + "_server_storage/", ctx.channel());
+            System.out.println("Отсылка обновления в конце метода ChannelRead сработала");
+        }
+        clientFiles.clear();
+        serverFiles.clear();
+        missingFiles.clear();
 
     }
     @Override

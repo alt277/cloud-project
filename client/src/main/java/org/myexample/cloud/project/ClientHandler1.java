@@ -1,15 +1,23 @@
 package org.myexample.cloud.project;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
-import java.nio.file.Path;
 
 public class ClientHandler1 extends ChannelInboundHandlerAdapter {
+   private MyCallback authOK;
+   private   RefreshCallback refreshCallback;
+
+   protected static String storage_way="";
+
+  ClientHandler1(MyCallback authOK,RefreshCallback refreshCallback) {
+        this.authOK=authOK;
+        this.refreshCallback=refreshCallback;
+      }
+
     public enum State {
         IDLE, NAME_LENGTH, NAME, FILE_LENGTH, FILE
     }
@@ -17,6 +25,7 @@ public class ClientHandler1 extends ChannelInboundHandlerAdapter {
     private static final byte SIGNAL_BYTE_MESSAGE = 20;
     private static final byte SIGNAL_BYTE_FILE = 25;
     private static final byte SYGNAL_AUTH_OK=15;
+    private static final byte SYGNAL_REFRESH=10;
 
     private State currentState = State.IDLE;
     private int nextLength;
@@ -24,9 +33,10 @@ public class ClientHandler1 extends ChannelInboundHandlerAdapter {
     private long receivedFileLength;
     private byte controlByte;
     private BufferedOutputStream out;
-    Channel channel;
-    Path path;
-    String command;
+    public void setStorage_way(String way){
+        storage_way=way;
+    }
+
 
     // контекст  - вся информация о соединении с клиентом
     @Override                                // ссылка на контекст  +  посылка
@@ -41,10 +51,12 @@ public class ClientHandler1 extends ChannelInboundHandlerAdapter {
                     receivedFileLength = 0L;
                     System.out.println("STATE: Start  receiving");
                 }else if(readed==SYGNAL_AUTH_OK) {
-                    System.out.println("Got Auth OK");
-//                    controller.setAuthorized(true);
-                    Authorisator.setAuthorised(true);
+                    System.out.println(" Auth OK");
+                    authOK.mycallback();
+                }else if(readed==SYGNAL_REFRESH){
+                   refreshCallback.refresh();
                 }
+
                 else {
                     System.out.println("ERROR: Invalid first byte - " + readed);
                 }
@@ -62,7 +74,9 @@ public class ClientHandler1 extends ChannelInboundHandlerAdapter {
                         byte[] fileName = new byte[nextLength];
                         buf.readBytes(fileName);
                         System.out.println("STATE: Filename received: " + new String(fileName, "UTF-8"));
-                        out = new BufferedOutputStream(new FileOutputStream("client_storage/" + new String(fileName)));
+                        out = new BufferedOutputStream(new FileOutputStream(storage_way + new String(fileName)));
+                      //  out = new BufferedOutputStream(new FileOutputStream("client_storage/" + new String(fileName)));
+//                        out = new BufferedOutputStream(new FileOutputStream(  new String(fileName)));
                         currentState = State.FILE_LENGTH;
                     }
                 }
@@ -114,7 +128,10 @@ public class ClientHandler1 extends ChannelInboundHandlerAdapter {
         }
     }
 
-
+public static void recieve(MyCallback callback,boolean OK){
+        if(OK){
+        callback.mycallback();}
+}
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
